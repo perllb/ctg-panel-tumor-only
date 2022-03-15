@@ -3,17 +3,17 @@ Nextflow pipeline to run panels in tumor-only (somatic) mode in Dragen
 
 - **NB!** This pipeline is not supported for automation (yet)
 
-- Dragen Tumor-Only analysis 
-- NEW: Must run ctg-parse-samplesheet (Davids script) before running. This will create one samplesheet pr project, which contain fastq1, fastq2 and bam columns in the [Data] section. 
-  - You then have two alternatives: Manually join these two samplesheet into one that will be run together, or run separately for each samplesheet. (See how to specify samplesheet below). 
-- The pipeline still includes demultiplexing. 
- - It supports running several projects on the same samplesheet/pipeline run (but can of course run just one project). 
- - It will do a common demux over all projects 
-  - And then move fastq files to respective projects output dir. 
-  - Note: In `ctg-delivery/panel-tumor-only/` there will be created a "metaid" folder, in which the demux output is written. 
-    - Then, for each project, a new output dir will be created with project-id as name.
-    - The metaid-folder will remain, even after then project-fastqs are moved to their respective project folders - so the Logs and Reports will be kept from the common demux.
-- The pipeline can be initiated using the `panel-tumor-only-driver` - it will generate a `ctg-projects/panel-tumor-only/<metaid>` folder, with nf pipeline, samplesheet, config and bin - and start pipeline from here. 
+* Dragen Tumor-Only analysis 
+* NEW: Must run ctg-parse-samplesheet (Davids script) before running. This will create one samplesheet pr project, which contain fastq1, fastq2 and bam columns in the [Data] section. 
+  * You then have two alternatives: Manually join these two samplesheet into one that will be run together, or run separately for each samplesheet. (See how to specify samplesheet below). 
+* The pipeline still includes demultiplexing. 
+  * It supports running several projects on the same samplesheet/pipeline run (but can of course run just one project). **NB!** not sure how well this works now after ctg-parse-samplesheet.. 
+  * It will do a common demux over all projects 
+    * And then move fastq files to respective projects output dir. 
+    * Note: In `ctg-delivery/panel-tumor-only/` there will be created a "metaid" folder, in which the demux output is written. All fastq files for all projects will be here. 
+      * Then, for each project, a new output dir will be created with project-id as name in which fastq files for the project are moved.
+      * The metaid-folder will remain, even after then project-fastqs are moved to their respective project folders - so the Logs and Reports will be kept from the common demux.
+* The pipeline can be initiated using the `panel-tumor-only-driver` - it will generate a `ctg-projects/panel-tumor-only/<metaid>` folder, with nf pipeline, samplesheet, config and bin - and start pipeline from here. 
 
 
 ## The following steps are performed by the pipeline:
