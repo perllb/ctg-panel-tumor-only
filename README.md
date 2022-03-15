@@ -7,7 +7,7 @@ Nextflow pipeline to run panels in tumor-only (somatic) mode in Dragen
 - NEW: Must run ctg-parse-samplesheet (Davids script) before running. This will create one samplesheet pr project, which contain fastq1, fastq2 and bam columns in the [Data] section. 
   - You then have two alternatives: Manually join these two samplesheet into one that will be run together, or run separately for each samplesheet. (See how to specify samplesheet below). 
 - The pipeline still includes demultiplexing. 
- - It supports running several projects on the same samplesheet/pipeline run. 
+ - It supports running several projects on the same samplesheet/pipeline run (but can of course run just one project). 
  - It will do a common demux over all projects 
   - And then move fastq files to respective projects output dir. 
 - Note: In `ctg-delivery/panel-tumor-only/` there will be created a "metaid" folder, in which the demux output is written. 
