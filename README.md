@@ -16,6 +16,11 @@ Nextflow pipeline to run panels in tumor-only (somatic) mode in Dragen
 * The pipeline can be initiated using the `panel-tumor-only-driver` - it will generate a `ctg-projects/panel-tumor-only/<metaid>` folder, with nf pipeline, samplesheet, config and bin - and start pipeline from here. 
 
 
+## Locations
+
+- ctg-pipeline: `/projects/fs1/shared/ctg-pipelines/ctg-panel-tumor-only`
+- driver: `/projects/fs1/shared/ctg-pipelines/ctg-panel-tumor-only/panel-tumor-only-driver`
+
 ## The following steps are performed by the pipeline:
 
 * `Demultiplexing` (dragen bcl-conversion): Converts raw basecalls to fastq, and demultiplex samples based on index. Adapters are trimmed if added to samplesheet [Settings].
