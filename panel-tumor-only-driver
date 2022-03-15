@@ -1,0 +1,269 @@
+#!/bin/bash
+
+####################################
+# PANEL SOMATIC TUMOR ONLY  driver #
+####################################
+
+### This script will 
+### * Run the panel-tumor-only pipeline on data in current runfolder
+### * Modify standard nextflow.config to project specific 
+### * Generate project folder in shared/ctg-delivery/panel-tumor-only
+###  -> Here it will store nextflow.config, nf-pipeline, samplesheet in ctg-log 
+###  -> Write pipeline output 
+### * nf-Pipeline writes qc to shared/ctg-qc/panel-tumor-only
+
+# Initialize variables
+runfolder=$(pwd)
+run=$(basename $runfolder)
+demux="ON"
+resume='n'
+index='dual'
+padding=20
+ffpe='false'
+b2farg=''
+drarg=''
+
+# usage message 
+usage() {
+
+    echo "####################################"
+    echo "# PANEL SOMATIC TUMOR ONLY  driver #"
+    echo "####################################"
+    echo ""
+    echo "Usage: panel-tumor-only-driver [ -i META_ID ] [ -s SAMPLESHEET ] [ -a INDEX-TYPE ] [ -b BCL2FASTQ-ARG ] [ -f FFPE ] [ -g DRAGEN_ARG ] [ -r RESUME ] [ -c CUSTOM-GENOME ] [ -t CUSTOM-TARGET ] [ -p PADDING ] [ -d DEMUX-OFF ] [ -h HELP ] "  1>&2
+    echo ""
+    echo ""
+    echo "Optional arguments: "
+    echo "META-ID    -i : Set 'meta-id' for runfolder (e.g. 210330-10x). Default: Takes date of runfolder + run ID in runfolder name and adds panel-tumor-only as suffix. E.g. '210330_A00681_0334_AHWFKTDMXX' becomes 210330_0334-panel-tumor-only "
+    echo "SAMPLESHEET   -s : Set samplesheet used for run (Default: CTG_SampleSheet.csv) "
+    echo "INDEX-TYPE    -a : Set -a if single index uses. (Default: dual) "  
+    echo "BCL2FASTQ-ARG -b : String with bcl2fastq argument. e.g. '--minimum-trimmed-read-length 20 --mask-short-adapter-reads 20' "
+    echo "FFPE          -f : Set -f if FFPE (then '--vc-enable-orientation-bias-filter true' will be set) "
+    echo "DRAGEN-ARG    -g : String with Dragen arguments. e.g. -g '--vc-enable-gatk-acceleration --vc-decoy-contigs' "
+    echo "RESUME        -r : Set if to resume nf-pipeline"
+    echo "CUSTOM-GENOME -c : Path to custom reference genome if needed. Skip if human/mouse defined in samplesheet "
+    echo "CUSTOM-TARGET -t : Path to custom target bed file if TWIST Comprehensive or Core is not used. Skip if core/comprehensive is defined in samplesheet "
+    echo "PADDING       -p : Set bp padding around target coordinates (default: 20)" 
+    echo "DEMUX-OFF     -d : Set flag to skip mkfastq (then fastq must be in FQDIR) "
+    echo "HELP          -h : print help message" 
+   
+}
+
+exit_abnormal() {
+    usage
+    exit 1
+}
+
+# Read and control input arguments 
+while getopts i:s:b:fg:ac:t:p:rdh opt; do
+    case $opt in
+	i) id=$OPTARG
+	    ;;
+	s) sheet=$OPTARG
+	    ;;
+	a) index="single"
+	    ;;
+	b) b2farg=$OPTARG
+	    ;;
+	f) ffpe='true'
+	    ;;
+	g) drarg=$OPTARG
+	    ;;
+	r) resume="y"
+	    ;;
+	c) custom_genome=$OPTARG
+	    ;;
+	t) custom_target=$OPTARG
+	    ;;
+	p) padding=$OPTARG
+	    ;;
+	d) demux="OFF"
+	    ;;
+	h) exit_abnormal
+	    ;;
+	\?) echo "> Error: Invalid option -$OPTARG" >&2
+	    exit_abnormal ;;
+	:) echo "> Error: -${OPTARG} requires an argument: -i needs project-id and -s need samplesheet name! "
+	    exit_abnormal ;;
+    esac
+done
+
+## Check arguments
+shift "$(( OPTIND -1 ))"
+
+# Check samplesheet name
+if [ -z $sheet ]; then
+    echo ""; echo "> WARNING! No samplesheet specified"
+    sheet="CTG_SampleSheet.panelTonly.csv"
+    echo "- Searching for: $sheet"
+    if [ ! -f $sheet ]; then
+	echo "> Error: $sheet does not exist (in current dir)"
+	echo "- Please specify correct samplesheet, or create a $sheet in current runfolder"
+	exit_abnormal
+    fi
+fi
+
+# Check meta-id - assign project number if not specified
+if [ -z $id ]; then
+    echo "> No meta-ID specified"
+    metaid=$(grep "metaid," $sheet | cut -f2 -d"," | tr -d '\n\r')
+    if [ -z $metaid ]; then
+	metaid=$(echo $run | cut -f1,3 -d"_")
+	id="${metaid}-panel-tumor-only"
+    else
+	id="${metaid}"
+    fi
+    echo "- Using: '${id}'"
+fi
+
+
+# Check if meta-ID already exist
+if [ "$resume" == 'n' ] && [ -d /projects/fs1/shared/ctg-projects/panel-tumor-only/$id ]; then
+    # Prompt user to approve overwriting current panel-tumor-only project-folder
+    read -p "> WARNING: $id has been used before:
+
+The following directories already exist:
+- /projects/fs1/shared/ctg-projects/panel-tumor-only/$id (not deleted if demux off)
+- /projects/fs1/shared/ctg-qc/panel-tumor-only/$id 
+- /projects/fs1/shared/ctg-delivery/panel-tumor-only/$id (not deleted if demux off)
+
+
+ Do you want to overwrite these folders? 
+
+(y/n)  ... : " prompt
+    if [[ $prompt != "y" ]]
+    then 
+	echo "> Exiting: Please provide new [ -i metaID ] !"
+	exit_abnormal
+    else
+	echo "> Deleting content of the folders.. "
+	rm -r /projects/fs1/shared/ctg-qc/panel-tumor-only/$id*
+	if [ $demux == "ON" ]; then
+      	    rm -r /projects/fs1/shared/ctg-projects/panel-tumor-only/$id
+	    rm -r /projects/fs1/shared/ctg-delivery/panel-tumor-only/$id
+	fi
+    fi
+else
+    echo "> Resuming project '$id' "
+fi
+
+
+##############
+# Print info #
+##############
+echo ""
+echo "> The following arguments are entered:"
+echo "ID               : $id"
+echo "Sheet            : $sheet"
+echo "Index-type       : ${index}-index"
+echo "Bcl2fastq arg    : '$b2farg'"
+echo "Dragen arg       : '$drarg'"
+echo "PADDING          : $padding "
+echo "FFPE             : $ffpe "
+if [ -z $custom_genome ]; then
+    echo "Custom Genome    : NONE "
+else
+    echo "Custom Genome    : $custom_genome "
+fi
+if [ -z $custom_target ]; then
+    echo "Custom Target    : NONE "
+else
+    echo "Custom Target    : $custom_target "
+fi
+if [ $demux == "ON" ]; then
+    echo "Demux            : YES "
+else
+    echo "Demux            : NO "
+fi
+if [ $resume == "y" ]; then
+    echo "Resume           : YES "
+else
+    echo "Resume           : NO "
+fi
+
+echo ""
+echo "Runfolder          : $runfolder "
+echo "Project Logfolder  : /projects/fs1/shared/ctg-projects/panel-tumor-only/$id"
+echo "QC Logfolder       : /projects/fs1/shared/ctg-qc/panel-tumor-only/$id"
+echo "Output             : /projects/fs1/shared/ctg-delivery/panel-tumor-only/$id"
+echo ""
+
+# Prompt user to approve running in current directory and input
+read -p "> WARNING: Can only be run from within runfolder! 
+
+- Are you in runfolder in which you want run? 
+- And is input described above correct ?  
+
+(y/n)  ... : " prompt
+if [[ $prompt != "y" ]]
+then 
+    echo "> Exiting: Go to runfolder!"
+    exit 0
+fi
+
+################
+# Set up files #
+################
+
+# Creating project dir for logging pipeline
+projdir="/projects/fs1/shared/ctg-projects/panel-tumor-only/$id/"
+mkdir -p $projdir
+
+# Copy nextflow script and config to project folder
+nf_pipe="/projects/fs1/shared/ctg-pipelines/ctg-panel-tumor-only/pipe-panel-tumor-only.nf"
+nf_bin="/projects/fs1/shared/ctg-pipelines/ctg-panel-tumor-only/bin"
+nf_config="/projects/fs1/shared/ctg-pipelines/ctg-panel-tumor-only/nextflow.config"
+
+cp $nf_pipe $projdir
+cp $nf_config $projdir
+cp -r $nf_bin $projdir
+
+# Edit config file
+proj_conf=$projdir/nextflow.config
+sed "s/xmetaidx/$id/g" $proj_conf > tmp.txt; mv tmp.txt $proj_conf
+sed "s/xrunx/$run/g" $proj_conf > tmp.txt; mv tmp.txt $proj_conf
+sed "s/xsamplesheetx/$sheet/g" $proj_conf > tmp.txt; mv tmp.txt $proj_conf
+sed "s/xbcl2fastqargx/$b2farg/g" $proj_conf > tmp.txt; mv tmp.txt $proj_conf
+sed "s/xdragenargx/$drarg/g" $proj_conf > tmp.txt; mv tmp.txt $proj_conf
+sed "s/xindextypex/$index/g" $proj_conf > tmp.txt; mv tmp.txt $proj_conf
+sed "s/xpaddingx/$padding/g" $proj_conf > tmp.txt; mv tmp.txt $proj_conf
+sed "s/xffpex/$ffpe/g" $proj_conf > tmp.txt; mv tmp.txt $proj_conf
+if [ ! -z $custom_genome ]; then
+    sed "s|xcustomgenomex|$custom_genome|g" $proj_conf > tmp.txt; mv tmp.txt $proj_conf
+fi
+if [ ! -z $custom_target ]; then
+    sed "s|xcustomtargetx|$custom_target|g" $proj_conf > tmp.txt; mv tmp.txt $proj_conf
+fi
+if [ $demux == "ON" ];then
+    sed "s/xdemuxx/y/g" $proj_conf > tmp.txt; mv tmp.txt $proj_conf
+else
+    sed "s/xdemuxx/n/g" $proj_conf > tmp.txt; mv tmp.txt $proj_conf
+fi
+
+# Copy edited config to runfolder
+cp $proj_conf $runfolder
+# Copy samplesheet to project folder (ctg-projects..)
+cp $sheet $projdir
+
+#####################
+# Start nf-pipeline #
+#####################
+
+# Go to ctg-project folder to execute pipeline
+cd $projdir
+
+if [ $resume == "y" ]; then
+    nohup nextflow run $nf_pipe -resume > log.nf.panel-tumor-only.$id &
+else
+    nohup nextflow run $nf_pipe > log.nf.panel-tumor-only.$id &
+fi
+echo ""; echo ""
+echo "#################################"
+echo "# panel-tumor-only pipeline submitted #"
+echo "#################################"
+echo ""; echo "";
+
+
+
+
+
