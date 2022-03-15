@@ -10,9 +10,9 @@ Nextflow pipeline to run panels in tumor-only (somatic) mode in Dragen
  - It supports running several projects on the same samplesheet/pipeline run (but can of course run just one project). 
  - It will do a common demux over all projects 
   - And then move fastq files to respective projects output dir. 
-- Note: In `ctg-delivery/panel-tumor-only/` there will be created a "metaid" folder, in which the demux output is written. 
-  - Then, for each project, a new output dir will be created with project-id as name.
-  - The metaid-folder will remain, even after then project-fastqs are moved to their respective project folders - so the Logs and Reports will be kept from the common demux.
+  - Note: In `ctg-delivery/panel-tumor-only/` there will be created a "metaid" folder, in which the demux output is written. 
+    - Then, for each project, a new output dir will be created with project-id as name.
+    - The metaid-folder will remain, even after then project-fastqs are moved to their respective project folders - so the Logs and Reports will be kept from the common demux.
 - The pipeline can be initiated using the `panel-tumor-only-driver` - it will generate a `ctg-projects/panel-tumor-only/<metaid>` folder, with nf pipeline, samplesheet, config and bin - and start pipeline from here. 
 
 
